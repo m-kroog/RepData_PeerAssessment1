@@ -1,25 +1,146 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research"
+author: "Michael Kroog"
+date: "July 20, 2017"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+Reproducible Research Week 2 Project 1
+==========================================================
 
+Calculate the total number of steps taken per day
 
+```{r}
+activity <- read.csv("activity.csv", header = TRUE)
+totalsum <- with(activity, tapply(steps, date, sum, na.rm = T))
+dfsum <- data.frame(date = names(totalsum), steps = totalsum)
+```
 
-## What is mean total number of steps taken per day?
+Histogram of the total number of steps taken per day
 
+```{r}
+library(ggplot2)
+ggplot(data = dfsum, aes(x = steps)) + geom_histogram(bins = 30) + xlab("Total Steps")
+```
 
+The mean and median of the total number of steps taken per day
 
-## What is the average daily activity pattern?
+```{r}
+totalmean <- with(activity, tapply(steps, date, mean, na.rm = T))
+dfmean <- data.frame(date = names(totalmean), steps = totalmean)
+dfmean <- na.omit(dfmean)
 
+totalmedian <- with(activity, tapply(steps, date, median, na.rm = T))
+dfmedian <- data.frame(date = names(totalmedian), steps = totalmedian)
+dfmedian <- na.omit(dfmedian)
+```
+The mean number of steps taken per day
 
+```{r}
+dfmean
+```
 
-## Imputing missing values
+The median number of steps taken per day
 
+```{r}
+dfmedian
+```
 
+Time series plot of the interval and average number of steps taken per day
 
-## Are there differences in activity patterns between weekdays and weekends?
+```{r}
+totalinterval <- with(activity, tapply(steps, interval, mean, na.rm = T))
+dfinterval <- data.frame(steps = totalinterval, interval = names(totalinterval))
+
+ggplot(dfinterval, aes(x = interval, y = steps)) + geom_line(aes(group = 1), color = "blue") + scale_x_discrete(breaks = seq(60, 2355, 60), limits = 0:2355) + theme(axis.text.x= element_text(size = 10, angle = 90)) + xlab("Interval") + ylab("Average Number of Steps")
+```
+
+The plot shows that interval 835 contains on average the maximum number of steps (206)
+
+Total number of missing values
+
+```{r}
+sum(is.na(activity))
+```
+The total number of missing vales is 2304
+
+The following code finds the rows containing NA values, creates a data frame
+of equal length containing the average number of steps taken for the corressponding
+interval of missing values and imputes them in place of the NAs
+
+```{r}
+activitynew <- read.csv("activity.csv", header = TRUE)
+miss <- which(is.na(activitynew$steps))
+dfintervalrep <- sapply(dfinterval, rep.int, times = 4)
+activitynew$steps[miss] <- dfintervalrep
+
+activitymean <- with(activitynew, tapply(steps, date, mean, na.rm = T))
+dfactivitymean <- data.frame(date = names(activitymean), steps = activitymean)
+
+activitymedian <- with(activitynew, tapply(steps, date, median, na.rm = T))
+dfactivitymedian <- data.frame(date = names(activitymedian), steps = activitymedian)
+
+ggplot(data = dfactivitymean, aes(x = steps)) + geom_histogram(bins = 30) + xlab("Total Steps")
+```
+
+Imputed mean
+
+```{r}
+dfactivitymean
+```
+
+Imputed median
+
+```{r}
+dfactivitymedian
+
+identical(dfmean, dfactivitymean)
+identical(dfmedian ,dfactivitymedian)
+```
+
+The values of the means and medians of original data are different from the values of the adjusted data.
+
+```{r}
+values <- rep("missing", times = 53)
+values <- append(values, rep("imputed", times =61))
+newdfmean <- rbind(dfmean, dfactivitymean)
+newdfmean$values <- factor(cbind(values))
+```
+
+The impact of adding values in place of NAs results are displayed in the following plot
+
+```{r}
+ggplot(newdfmean, aes(x = date, y = steps, color = values)) + geom_line(aes(group = 1)) + facet_grid(values ~ .) + xlab("Date") + ylab("Average Number of Steps") + theme(axis.text.x = element_text(size = 10, angle = 90)) + scale_x_discrete(expand=c(0.001, 0))
+```
+
+Creates a new factor variable indicating whether a day is a weekday or weekend
+```{r}
+activityweek <- activitynew
+activityweek$weekday <- weekdays(as.Date(activityweek$date))
+activityweek$weekday <- gsub("S.*y","Weekend", activityweek$weekday)
+activityweek$weekday <- factor(gsub("[MTWF].*y","Weekday", activityweek$weekday))
+```
+
+Time series panel plot of 5-minute intervals and average steps taken
+
+```{r}
+activityweekend <- activityweek[which(activityweek$weekday %in% "Weekend"),]
+activityweekday <- activityweek[which(activityweek$weekday %in% "Weekday"),]
+
+activityweekendmean <- with(activityweekend, tapply(steps, interval, mean))
+activityweekendmean <- data.frame(steps = activityweekendmean, interval = names(activityweekendmean))
+activityweekdaymean <- with(activityweekday, tapply(steps, interval, mean))
+activityweekdaymean <- data.frame(steps = activityweekdaymean, interval = names(activityweekdaymean))
+
+activityweekendmean$weekday <- cbind(rep("Weekend", each = 288))
+activityweekdaymean$weekday <- cbind(rep("Weekday", each = 288))
+
+dfweekmean <- rbind(activityweekendmean, activityweekdaymean)
+dfweekmean$weekday <- factor(dfweekmean$weekday)
+
+ggplot(dfweekmean, aes(x = interval, y = steps, color = weekday)) + geom_line(aes(group = 1)) + scale_x_discrete(breaks = seq(0, 2355, 60), limits = 0:2355) + theme(axis.text.x= element_text(size = 10, angle = 90)) + facet_grid(weekday ~ .) + xlab("Interval") + ylab("Average Number of Steps")
+```
